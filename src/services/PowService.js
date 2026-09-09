@@ -30,7 +30,6 @@ class PowService {
             }
 
             const data = await response.json();
-            console.log("PoW challenge data:", data);
             const challenge = data.data.biz_data.challenge;
 
             if (!WASM_CONFIG.SUPPORTED_ALGORITHMS.includes(challenge.algorithm)) {

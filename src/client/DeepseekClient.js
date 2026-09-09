@@ -115,11 +115,17 @@ class DeepseekClient {
 
                             if (parsed.p) currentPath = parsed.p;
                             if (parsed.v !== undefined && typeof parsed.v === 'string') {
-                                const isThinking = currentPath === 'response/thinking_content';
-                                yield {
-                                    type: isThinking ? 'thinking' : 'content',
-                                    text: parsed.v
-                                };
+                                if (currentPath === 'response/thinking_content') {
+                                    yield {
+                                        type: 'thinking',
+                                        text: parsed.v
+                                    };
+                                } else if (currentPath === 'response/content' || currentPath === 'response/text') {
+                                    yield {
+                                        type: 'content',
+                                        text: parsed.v
+                                    };
+                                }
                             }
                         } catch (e) {}
                     }
