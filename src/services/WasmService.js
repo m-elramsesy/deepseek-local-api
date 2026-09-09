@@ -13,10 +13,27 @@ class WasmService {
     }
 
     async initialize(wasmPath) {
-        const finalPath = path.resolve(process.cwd(), wasmPath);
+        let finalPath = wasmPath;
+        if (!finalPath) {
+            finalPath = path.resolve(__dirname, '../../wasm/sha3_wasm_bg.7b9ca65ddd.wasm');
+        } else if (!path.isAbsolute(finalPath)) {
+            // First check relative to package root
+            const pkgPath = path.resolve(__dirname, '../../', finalPath);
+            if (fs.existsSync(pkgPath)) {
+                finalPath = pkgPath;
+            } else {
+                finalPath = path.resolve(process.cwd(), finalPath);
+            }
+        }
 
         if (!fs.existsSync(finalPath)) {
-            throw new Error(`WASM file not found: ${finalPath}`);
+            // Fallback check to bundled package wasm
+            const fallbackPath = path.resolve(__dirname, '../../wasm/sha3_wasm_bg.7b9ca65ddd.wasm');
+            if (fs.existsSync(fallbackPath)) {
+                finalPath = fallbackPath;
+            } else {
+                throw new Error(`WASM file not found: ${finalPath}`);
+            }
         }
 
         try {

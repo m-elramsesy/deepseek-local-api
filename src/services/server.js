@@ -86,9 +86,9 @@ function formatMessagesToPrompt(messages) {
  * @returns {Promise<http.Server>}
  */
 async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
-    const client = new DeepseekClient(token);
+    const defaultClient = new DeepseekClient(token || null);
     process.stdout.write('Initializing DeepSeek client & WASM solver for local server... ');
-    await client.initialize();
+    await defaultClient.initialize();
     console.log('Done.\n');
 
     const host = isNetworkAvailable ? '0.0.0.0' : '127.0.0.1';
@@ -130,6 +130,28 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
         // OpenAI Chat Completions endpoint
         if (req.method === 'POST' && (pathname === '/v1/chat/completions' || pathname === '/chat/completions')) {
             try {
+                // Determine token: request Bearer token overrides server default
+                const authHeader = req.headers['authorization'] || '';
+                let requestToken = token || process.env.DEEPSEEK_TOKEN;
+                if (authHeader.startsWith('Bearer ')) {
+                    const bearer = authHeader.slice(7).trim();
+                    if (bearer && bearer !== 'null' && bearer !== 'undefined') {
+                        requestToken = bearer;
+                    }
+                }
+
+                if (!requestToken) {
+                    res.writeHead(401, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        error: {
+                            message: 'Authentication required: Please provide your DeepSeek token via "Authorization: Bearer <token>" header or set DEEPSEEK_TOKEN in environment/.env.',
+                            type: 'authentication_error',
+                            code: 'invalid_api_key'
+                        }
+                    }));
+                    return;
+                }
+
                 const body = await parseJsonBody(req);
                 const model = body.model || 'deepseek-chat';
                 const stream = Boolean(body.stream);
@@ -144,9 +166,13 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
                     return;
                 }
 
+                // Create client using active token, sharing the already-initialized WASM solver
+                const activeClient = (requestToken === token) ? defaultClient : new DeepseekClient(requestToken);
+                activeClient.powService.wasmService = defaultClient.powService.wasmService;
+
                 // Create a fresh session for this completion request
-                const session = await client.createSession();
-                const completionResponse = await client.sendMessage(prompt, session, {
+                const session = await activeClient.createSession();
+                const completionResponse = await activeClient.sendMessage(prompt, session, {
                     thinking_enabled,
                     search_enabled
                 });
@@ -162,7 +188,7 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
                         'X-Accel-Buffering': 'no'
                     });
 
-                    for await (const chunk of client.streamResponse(completionResponse, session)) {
+                    for await (const chunk of activeClient.streamResponse(completionResponse, session)) {
                         const delta = {};
                         if (chunk.type === 'thinking') {
                             delta.reasoning_content = chunk.text;
@@ -208,7 +234,7 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
                     let fullContent = '';
                     let fullThinking = '';
 
-                    for await (const chunk of client.streamResponse(completionResponse, session)) {
+                    for await (const chunk of activeClient.streamResponse(completionResponse, session)) {
                         if (chunk.type === 'thinking') {
                             fullThinking += chunk.text;
                         } else if (chunk.type === 'content') {
@@ -263,6 +289,7 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
         server.on('error', reject);
         server.listen(port, host, () => {
             const localIp = getLocalNetworkIp();
+            const hasDefaultToken = Boolean(token || process.env.DEEPSEEK_TOKEN);
             console.log('\n┌──────────────────────────────────────────────────────────────────────────');
             console.log('│ 🚀 DeepSeek OpenAI-Compatible Local Server Running');
             console.log('├──────────────────────────────────────────────────────────────────────────');
@@ -272,6 +299,11 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
                 console.log(`│ 🔓 Network Access    : Enabled (0.0.0.0 - accessible to LAN devices)`);
             } else {
                 console.log(`│ 🔒 Network Access    : Disabled (127.0.0.1 - localhost only)`);
+            }
+            if (hasDefaultToken) {
+                console.log(`│ 🔑 Auth Mode         : Server DEEPSEEK_TOKEN active (Bearer header can override)`);
+            } else {
+                console.log(`│ 🔑 Auth Mode         : Per-request Bearer token (no server DEEPSEEK_TOKEN set)`);
             }
             console.log('├──────────────────────────────────────────────────────────────────────────');
             console.log(`│ 💬 Chat Endpoint     : POST http://localhost:${port}/v1/chat/completions`);

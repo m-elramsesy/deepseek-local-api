@@ -278,15 +278,8 @@ function parseCliArgs(argv) {
     return { isServer, port, isNetworkAvailable, otherArgs };
 }
 
-module.exports = { chat, startInteractive, startServer, parseCliArgs };
-
-if (require.main === module) {
+async function runCli() {
     const token = process.env.DEEPSEEK_TOKEN;
-    if (!token) {
-        console.error("Please set DEEPSEEK_TOKEN in .env");
-        process.exit(1);
-    }
-
     const { isServer, port, isNetworkAvailable, otherArgs } = parseCliArgs(process.argv);
 
     if (isServer) {
@@ -295,6 +288,19 @@ if (require.main === module) {
             process.exit(1);
         });
     } else {
+        if (!token) {
+            console.error('\x1b[1;31mError: DEEPSEEK_TOKEN is not set.\x1b[0m\n');
+            console.error('Please configure your DeepSeek token in one of the following ways:');
+            console.error('  1. In a .env file in the current folder:');
+            console.error('     DEEPSEEK_TOKEN="your_token_here"');
+            console.error('  2. In your system environment variables:');
+            console.error('     Windows CMD        : set DEEPSEEK_TOKEN=your_token');
+            console.error('     Windows PowerShell : $env:DEEPSEEK_TOKEN="your_token"');
+            console.error('     macOS / Linux      : export DEEPSEEK_TOKEN="your_token"\n');
+            console.error('Tip: You can obtain your token from https://chat.deepseek.com (DevTools -> Application -> Local Storage -> userToken).\n');
+            process.exit(1);
+        }
+
         const messageArg = otherArgs[0];
         const sessionArg = otherArgs[1];
 
@@ -304,4 +310,10 @@ if (require.main === module) {
             startInteractive(token, sessionArg).catch(console.error);
         }
     }
+}
+
+module.exports = { chat, startInteractive, startServer, parseCliArgs, runCli };
+
+if (require.main === module) {
+    runCli();
 } 

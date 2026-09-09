@@ -3,7 +3,26 @@ const path = require('path');
 const { API_ENDPOINTS } = require('../config/constants');
 const { HeadersBuilder } = require('../config/headers');
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const os = require('os');
+
+function resolveDataDir() {
+    const pkgDataDir = path.join(__dirname, '..', '..', 'data');
+    try {
+        if (!fs.existsSync(pkgDataDir)) {
+            fs.mkdirSync(pkgDataDir, { recursive: true });
+        }
+        fs.accessSync(pkgDataDir, fs.constants.W_OK);
+        return pkgDataDir;
+    } catch (e) {
+        const userHomeDataDir = path.join(os.homedir(), '.deepseek-local-api', 'data');
+        if (!fs.existsSync(userHomeDataDir)) {
+            fs.mkdirSync(userHomeDataDir, { recursive: true });
+        }
+        return userHomeDataDir;
+    }
+}
+
+const DATA_DIR = resolveDataDir();
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 
 class ChatSession {

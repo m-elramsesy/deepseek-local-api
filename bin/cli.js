@@ -3,12 +3,17 @@
 const path = require('path');
 const fs = require('fs');
 
-// Attempt to load .env from current working directory, then fallback to package root
+const os = require('os');
+
+// Attempt to load .env from current working directory, then home directory, then fallback to package root
 const cwdEnv = path.resolve(process.cwd(), '.env');
+const homeEnv = path.join(os.homedir(), '.deepseek-local-api', '.env');
 const pkgEnv = path.join(__dirname, '..', '.env');
 
 if (fs.existsSync(cwdEnv)) {
     require('dotenv').config({ path: cwdEnv });
+} else if (fs.existsSync(homeEnv)) {
+    require('dotenv').config({ path: homeEnv });
 } else if (fs.existsSync(pkgEnv)) {
     require('dotenv').config({ path: pkgEnv });
 } else {
@@ -62,5 +67,6 @@ if (args.includes('--version') || args.includes('-v')) {
     process.exit(0);
 }
 
-// Forward execution to main index runner
-require('../src/index.js');
+// Forward execution to main CLI runner
+const { runCli } = require('../src/index.js');
+runCli();

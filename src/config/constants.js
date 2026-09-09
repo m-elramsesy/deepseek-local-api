@@ -1,3 +1,4 @@
+const path = require('path');
 const DEEPSEEK_HOST = "chat.deepseek.com";
 
 const API_ENDPOINTS = {
@@ -11,7 +12,7 @@ const API_ENDPOINTS = {
 };
 
 const WASM_CONFIG = {
-    DEFAULT_PATH: "./wasm/sha3_wasm_bg.7b9ca65ddd.wasm",
+    DEFAULT_PATH: path.resolve(__dirname, '../../wasm/sha3_wasm_bg.7b9ca65ddd.wasm'),
     SUPPORTED_ALGORITHMS: ["DeepSeekHashV1"]
 };
 
