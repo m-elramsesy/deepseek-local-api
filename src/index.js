@@ -295,7 +295,7 @@ function parseCliArgs(argv) {
     return { isServer, port, isNetworkAvailable, cliToken, otherArgs };
 }
 
-async function promptForToken() {
+async function promptForToken(isServer) {
     if (!process.stdin.isTTY) {
         return null;
     }
@@ -306,11 +306,18 @@ async function promptForToken() {
             output: process.stdout
         });
 
-        console.log('\n\x1b[1;33m⚠️  DeepSeek authentication token not detected.\x1b[0m');
-        console.log('To start the DeepSeek Local API Server or CLI, a valid token is strictly required.');
-        console.log('\x1b[2m(Obtain it from chat.deepseek.com -> DevTools -> Application -> Local Storage -> userToken)\x1b[0m\n');
+        if (isServer) {
+            console.log('\n┌────────────────────────────────────────────────────────────');
+            console.log('│ \x1b[1;31m❌ [SERVER IS NOT WORKING]\x1b[0m');
+            console.log('├────────────────────────────────────────────────────────────');
+            console.log('│ ⚠️  Reason: DEEPSEEK_TOKEN is missing.');
+            console.log('│ 💡 Required to connect to DeepSeek Web Chat.');
+            console.log('└────────────────────────────────────────────────────────────\n');
+        } else {
+            console.log('\n\x1b[1;33m⚠️  DeepSeek authentication token not detected.\x1b[0m\n');
+        }
 
-        rl.question('\x1b[1;36m👉 Please paste your DEEPSEEK_TOKEN:\x1b[0m ', (answer) => {
+        rl.question('\x1b[1;36m👉 Paste your DEEPSEEK_TOKEN here to start:\x1b[0m ', (answer) => {
             rl.close();
             const token = answer.trim().replace(/^["']|["']$/g, '');
             resolve(token || null);
@@ -326,13 +333,13 @@ function saveTokenToHomeEnv(token) {
         }
         const envFile = path.join(homeDir, '.env');
         fs.writeFileSync(envFile, `DEEPSEEK_TOKEN="${token}"\n`, 'utf8');
-        console.log(`\x1b[32m✓ Token saved to ${envFile} (saved for all future npx and CLI calls).\x1b[0m\n`);
+        console.log(`\x1b[32m✓ Token saved (persisted for future npx & CLI calls).\x1b[0m\n`);
     } catch (e) {
         // Non-fatal if cannot write
     }
 }
 
-async function ensureToken(cliToken) {
+async function ensureToken(cliToken, isServer = false) {
     if (cliToken && cliToken.trim()) {
         const cleaned = cliToken.trim().replace(/^["']|["']$/g, '');
         process.env.DEEPSEEK_TOKEN = cleaned;
@@ -345,33 +352,34 @@ async function ensureToken(cliToken) {
     }
 
     // Try interactive prompt if in terminal
-    const prompted = await promptForToken();
+    const prompted = await promptForToken(isServer);
     if (prompted) {
         process.env.DEEPSEEK_TOKEN = prompted;
         saveTokenToHomeEnv(prompted);
         return prompted;
     }
 
-    // Strict failure message
-    console.error('\n\x1b[1;31mError: DEEPSEEK_TOKEN is strictly required.\x1b[0m');
-    console.error('The server or CLI cannot run without a valid token.\n');
-    console.error('You can provide your token using any of these methods:');
-    console.error('  1. Pass via CLI parameter:');
-    console.error('     npx @ramsesy/deepseek-local-api -s 4040 --token "your_token"');
-    console.error('     deepseek -s 4040 -t "your_token"\n');
-    console.error('  2. In a .env file in the current folder:');
-    console.error('     DEEPSEEK_TOKEN="your_token_here"\n');
-    console.error('  3. In system environment variables:');
-    console.error('     Windows CMD        : set DEEPSEEK_TOKEN=your_token');
-    console.error('     Windows PowerShell : $env:DEEPSEEK_TOKEN="your_token"');
-    console.error('     macOS / Linux      : export DEEPSEEK_TOKEN="your_token"\n');
-    console.error('Tip: You can obtain your token from https://chat.deepseek.com (DevTools -> Application -> Local Storage -> userToken).\n');
+    // Clear failure banner
+    if (isServer) {
+        console.error('\n┌────────────────────────────────────────────────────────────');
+        console.error('│ \x1b[1;31m❌ [SERVER IS NOT WORKING]\x1b[0m');
+        console.error('├────────────────────────────────────────────────────────────');
+        console.error('│ ⚠️  Reason: DEEPSEEK_TOKEN is missing.');
+        console.error('│ 💡 You can provide it in any of these simple ways:');
+        console.error('│    1. npx @ramsesy/deepseek-local-api -s 4040 --token "YOUR_TOKEN"');
+        console.error('│    2. Create a .env file with: DEEPSEEK_TOKEN="YOUR_TOKEN"');
+        console.error('│    3. Windows CMD: set DEEPSEEK_TOKEN=YOUR_TOKEN');
+        console.error('└────────────────────────────────────────────────────────────\n');
+    } else {
+        console.error('\n\x1b[1;31mError: DEEPSEEK_TOKEN is strictly required.\x1b[0m');
+        console.error('Please configure DEEPSEEK_TOKEN in .env or pass via --token flag.\n');
+    }
     process.exit(1);
 }
 
 async function runCli() {
     const { isServer, port, isNetworkAvailable, cliToken, otherArgs } = parseCliArgs(process.argv);
-    const token = await ensureToken(cliToken);
+    const token = await ensureToken(cliToken, isServer);
 
     if (isServer) {
         startServer({ token, port, isNetworkAvailable }).catch(err => {

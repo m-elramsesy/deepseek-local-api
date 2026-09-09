@@ -291,23 +291,58 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
     return new Promise((resolve, reject) => {
         server.on('error', reject);
         server.listen(port, host, () => {
-            const localIp = getLocalNetworkIp();
-            const hasDefaultToken = Boolean(token || process.env.DEEPSEEK_TOKEN);
-            console.log('\n┌──────────────────────────────────────────────────────────────────────────');
-            console.log('│ 🚀 DeepSeek OpenAI-Compatible Local Server Running');
-            console.log('├──────────────────────────────────────────────────────────────────────────');
-            console.log(`│ 📍 Local Base URL    : http://localhost:${port}/v1`);
+            console.log('\n┌────────────────────────────────────────────────────────────');
+            console.log('│ \x1b[1;32m✅ [SERVER IS WORKING]\x1b[0m');
+            console.log('├────────────────────────────────────────────────────────────');
+            console.log(`│ 📍 Local URL  : http://localhost:${port}/v1`);
             if (isNetworkAvailable) {
-                console.log(`│ 🌐 Network Base URL  : http://${localIp}:${port}/v1`);
-                console.log(`│ 🔓 Network Access    : Enabled (0.0.0.0 - accessible to LAN devices)`);
-            } else {
-                console.log(`│ 🔒 Network Access    : Disabled (127.0.0.1 - localhost only)`);
+                console.log(`│ 🌐 Network URL: http://${localIp}:${port}/v1`);
             }
-            console.log(`│ 🔑 Auth Status       : Active (DEEPSEEK_TOKEN verified)`);
-            console.log('├──────────────────────────────────────────────────────────────────────────');
-            console.log(`│ 💬 Chat Endpoint     : POST http://localhost:${port}/v1/chat/completions`);
-            console.log(`│ 📋 Models Endpoint   : GET  http://localhost:${port}/v1/models`);
-            console.log('└──────────────────────────────────────────────────────────────────────────\n');
+            console.log(`│ 💬 Chat API   : POST /v1/chat/completions`);
+            console.log(`│ 📋 Models API : GET  /v1/models`);
+            console.log('├────────────────────────────────────────────────────────────');
+            console.log('│ 🛑 To stop    : Press \x1b[1m\'q\'\x1b[0m or \x1b[1mCtrl+C\x1b[0m');
+            console.log('└────────────────────────────────────────────────────────────\n');
+
+            let isStopping = false;
+            function stopServer() {
+                if (isStopping) return;
+                isStopping = true;
+                console.log('\n\x1b[1;33m🛑 [SERVER STOPPED] Server has been shut down successfully.\x1b[0m\n');
+                try {
+                    server.close(() => process.exit(0));
+                } catch (e) {
+                    process.exit(0);
+                }
+                setTimeout(() => process.exit(0), 500);
+            }
+
+            process.on('SIGINT', stopServer);
+            process.on('SIGTERM', stopServer);
+
+            if (process.stdin.isTTY) {
+                try {
+                    process.stdin.setRawMode(true);
+                    process.stdin.resume();
+                    process.stdin.setEncoding('utf8');
+                    process.stdin.on('data', (key) => {
+                        if (key === 'q' || key === 'Q' || key === '\u0003') {
+                            stopServer();
+                        }
+                    });
+                } catch (e) {}
+            } else {
+                try {
+                    process.stdin.resume();
+                    process.stdin.on('data', (chunk) => {
+                        const str = chunk.toString().trim().toLowerCase();
+                        if (str === 'q' || str === 'stop' || str === 'exit') {
+                            stopServer();
+                        }
+                    });
+                } catch (e) {}
+            }
+
             resolve(server);
         });
     });
