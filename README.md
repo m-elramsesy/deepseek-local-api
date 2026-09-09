@@ -5,9 +5,9 @@ Convert DeepSeek Web Chat into a zero-overhead, OpenAI-compatible local API serv
 ---
 
 > [!IMPORTANT]
-> ### 🧠 The Brain & Hands Bridge: `delegate-to-deepseek` Skill
-> - **Pure Text & Deep Reasoning**: This local gateway converts DeepSeek into an OpenAI-compatible endpoint for world-class code synthesis and R1 reasoning. DeepSeek operates in **pure text (no native tool calling)**.
-> - **The Hands (Your Agent Harness)**: Agents like **Hermes**, **Claude Code**, **Cursor**, **OpenCode**, and **Antigravity** possess the actual tools (`write_to_file`, `replace_file_content`, `run_command`).
+> ### 🧠 Native Tool Calling Support (v0.9.0+)
+> - **Zero-Config Tool / Function Calling**: When agent harnesses like **Hermes**, **Claude Code**, or custom bots pass `tools` in their requests, the gateway automatically guides DeepSeek, parses tool calls (e.g. `write_file`, `terminal`), normalizes local filesystem paths, and streams standard OpenAI `delta.tool_calls`.
+> - **The Hands (Your Agent Harness)**: The agent harness executes the returned tool calls locally and creates files, executes terminal commands, and edits code seamlessly.
 > - **Install the Official Skill via skills.sh (Vercel)**:
 >   ```bash
 >   npx skills add m-elramsesy/deepseek-local-api --skill delegate-to-deepseek -g
