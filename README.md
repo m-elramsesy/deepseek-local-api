@@ -26,17 +26,17 @@ Obtain your token from [chat.deepseek.com](https://chat.deepseek.com):
 ### 2. Run Directly with npx
 ```bash
 # Run interactive chat
-npx deepseek-local-api
+npx @ramsesy/deepseek-local-api
 
 # Or start the OpenAI-compatible local server
-npx deepseek-local-api --server 3000
+npx @ramsesy/deepseek-local-api --server 3000
 ```
 
 ### 3. Or Install Globally
 ```bash
-npm install -g deepseek-local-api
+npm install -g @ramsesy/deepseek-local-api
 
-# Now available anywhere:
+# Now available anywhere (CLI command names remain short):
 deepseek-local-api
 # Or via short alias:
 deepseek
