@@ -30,11 +30,15 @@
     "client",
     "cli"
   ],
-  "author": "elramsesy",
+  "author": "m-elramsesy",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/springmusk026/DeepSeek-Chat-API-Client.git"
+    "url": "git+https://github.com/m-elramsesy/deepseek-local-api.git"
   },
+  "bugs": {
+    "url": "https://github.com/m-elramsesy/deepseek-local-api/issues"
+  },
+  "homepage": "https://github.com/m-elramsesy/deepseek-local-api#readme",
   "license": "MIT",
   "dependencies": {
     "dotenv": "^16.0.3"
