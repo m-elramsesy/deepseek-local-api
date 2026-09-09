@@ -15,6 +15,22 @@ Use this skill whenever you need to offload complex coding, complete file genera
 
 ---
 
+## 📥 Installation via skills.sh (Vercel)
+
+Install this skill directly into your AI coding agent (Hermes, Claude Code, Cursor, Antigravity, OpenCode, Continue) using the official Vercel Skills CLI:
+
+```bash
+# Install to your agent environment:
+npx skills add m-elramsesy/deepseek-local-api --skill delegate-to-deepseek
+
+# Or install globally for all agents:
+npx skills add m-elramsesy/deepseek-local-api --skill delegate-to-deepseek -g
+```
+
+> **Registry**: [https://skills.sh/m-elramsesy/deepseek-local-api/delegate-to-deepseek](https://skills.sh/m-elramsesy/deepseek-local-api/delegate-to-deepseek)
+
+---
+
 ## 🧠 Core Philosophy: The Brain & Hands Architecture
 
 When working with `deepseek-local-api`:
