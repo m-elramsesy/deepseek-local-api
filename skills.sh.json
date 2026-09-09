@@ -1,0 +1,13 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Agent Workflows",
+      "description": "Skills for delegating heavy coding, reasoning, and full-file generation to DeepSeek.",
+      "skills": [
+        "delegate-to-deepseek"
+      ]
+    }
+  ]
+}
