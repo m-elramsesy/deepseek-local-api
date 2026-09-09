@@ -20,10 +20,16 @@ const BASE_HEADERS = {
 };
 
 class HeadersBuilder {
+    static sanitizeToken(token) {
+        if (!token || typeof token !== 'string') return '';
+        return token.trim().replace(/^["']|["']$/g, '').trim();
+    }
+
     static getAuthHeaders(token, cookie = process.env.DEEPSEEK_COOKIE) {
+        const cleanToken = this.sanitizeToken(token);
         const headers = {
             ...BASE_HEADERS,
-            "Authorization": `Bearer ${token}`
+            "Authorization": `Bearer ${cleanToken}`
         };
         if (cookie) {
             headers["Cookie"] = cookie;

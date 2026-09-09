@@ -52,6 +52,30 @@ function setCorsHeaders(res) {
 }
 
 /**
+ * Safely extract text from message content (supports string, array of parts, or object)
+ */
+function extractContentText(content) {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+        return content
+            .map(part => {
+                if (typeof part === 'string') return part;
+                if (part && typeof part === 'object') {
+                    return part.text || part.content || '';
+                }
+                return '';
+            })
+            .filter(Boolean)
+            .join('\n');
+    }
+    if (typeof content === 'object') {
+        return content.text || content.content || JSON.stringify(content);
+    }
+    return String(content);
+}
+
+/**
  * Convert OpenAI messages array into a prompt for DeepSeek
  */
 function formatMessagesToPrompt(messages) {
@@ -59,19 +83,22 @@ function formatMessagesToPrompt(messages) {
     if (!Array.isArray(messages) || messages.length === 0) return '';
 
     if (messages.length === 1) {
-        return messages[0].content || '';
+        return extractContentText(messages[0].content);
     }
 
     const parts = [];
     for (const msg of messages) {
         const role = msg.role || 'user';
-        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+        const content = extractContentText(msg.content);
+        if (!content) continue;
         if (role === 'system') {
             parts.push(`[System]: ${content}`);
         } else if (role === 'user') {
             parts.push(`User: ${content}`);
         } else if (role === 'assistant') {
             parts.push(`Assistant: ${content}`);
+        } else {
+            parts.push(`${role}: ${content}`);
         }
     }
     return parts.join('\n\n');
@@ -133,13 +160,25 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
         // OpenAI Chat Completions endpoint
         if (req.method === 'POST' && (pathname === '/v1/chat/completions' || pathname === '/chat/completions')) {
             try {
-                // Determine token: request Bearer token overrides server default
+                // Determine token: prefer server default token if set
                 const authHeader = req.headers['authorization'] || '';
-                let requestToken = token || process.env.DEEPSEEK_TOKEN;
+                const defaultToken = (token || process.env.DEEPSEEK_TOKEN || '').trim().replace(/^["']|["']$/g, '');
+                let requestToken = defaultToken;
+
                 if (authHeader.startsWith('Bearer ')) {
-                    const bearer = authHeader.slice(7).trim();
-                    if (bearer && bearer !== 'null' && bearer !== 'undefined') {
+                    const bearer = authHeader.slice(7).trim().replace(/^["']|["']$/g, '');
+                    const isPlaceholder = !bearer ||
+                        ['null', 'undefined', 'none', 'dummy', 'test', 'default', 'placeholder', 'no-key', 'empty', 'hermes'].includes(bearer.toLowerCase()) ||
+                        bearer.toLowerCase().startsWith('sk-') ||
+                        bearer.toLowerCase().startsWith('hermes') ||
+                        (defaultToken && bearer.length !== defaultToken.length);
+
+                    if (!isPlaceholder && bearer.length >= 60) {
+                        // Incoming Bearer looks like a genuine custom 64-char DeepSeek web token
                         requestToken = bearer;
+                    } else {
+                        // Keep server-configured default token!
+                        requestToken = defaultToken || bearer;
                     }
                 }
 
@@ -162,6 +201,8 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
                 const thinking_enabled = body.thinking_enabled !== undefined ? body.thinking_enabled : isReasoner;
                 const search_enabled = Boolean(body.search_enabled);
 
+                console.log(`[Request] ${req.method} ${pathname} | Model: ${model} | Stream: ${stream} | Token: ${requestToken === defaultToken ? 'Default (.env)' : 'Client Bearer'}`);
+
                 const prompt = formatMessagesToPrompt(body.messages || body.prompt);
                 if (!prompt) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -170,15 +211,32 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
                 }
 
                 // Create client using active token, sharing the already-initialized WASM solver
-                const activeClient = (requestToken === token) ? defaultClient : new DeepseekClient(requestToken);
+                let activeClient = (requestToken === defaultToken) ? defaultClient : new DeepseekClient(requestToken);
                 activeClient.powService.wasmService = defaultClient.powService.wasmService;
 
-                // Create a fresh session for this completion request
-                const session = await activeClient.createSession();
-                const completionResponse = await activeClient.sendMessage(prompt, session, {
-                    thinking_enabled,
-                    search_enabled
-                });
+                // Create a fresh session and send message, with auto-fallback to defaultClient
+                let session;
+                let completionResponse;
+                try {
+                    session = await activeClient.createSession();
+                    completionResponse = await activeClient.sendMessage(prompt, session, {
+                        thinking_enabled,
+                        search_enabled
+                    });
+                } catch (sendErr) {
+                    if (defaultToken && activeClient !== defaultClient && sendErr.message && sendErr.message.includes('40003')) {
+                        console.warn('\x1b[33m⚠️  [Hermes Fallback] Client Authorization token failed (40003: invalid token). Automatically falling back to server DEEPSEEK_TOKEN from .env.\x1b[0m');
+                        activeClient = defaultClient;
+                        requestToken = defaultToken;
+                        session = await activeClient.createSession();
+                        completionResponse = await activeClient.sendMessage(prompt, session, {
+                            thinking_enabled,
+                            search_enabled
+                        });
+                    } else {
+                        throw sendErr;
+                    }
+                }
 
                 const completionId = 'chatcmpl-' + Math.random().toString(36).substring(2, 15);
                 const createdTime = Math.floor(Date.now() / 1000);
@@ -274,8 +332,23 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
             } catch (err) {
                 console.error('Server error handling completion:', err);
                 if (!res.headersSent) {
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: { message: err.message, type: 'server_error' } }));
+                    const isAuthError = err.message && (
+                        err.message.includes('40003') ||
+                        err.message.toLowerCase().includes('authorization failed') ||
+                        err.message.toLowerCase().includes('invalid token')
+                    );
+                    const statusCode = isAuthError ? 401 : 500;
+                    const errorType = isAuthError ? 'authentication_error' : 'server_error';
+                    const errorCode = isAuthError ? 'invalid_api_key' : undefined;
+
+                    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        error: {
+                            message: err.message,
+                            type: errorType,
+                            code: errorCode
+                        }
+                    }));
                 } else {
                     res.end();
                 }
@@ -330,7 +403,7 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
                             stopServer();
                         }
                     });
-                } catch (e) {}
+                } catch (e) { }
             } else {
                 try {
                     process.stdin.resume();
@@ -340,7 +413,7 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
                             stopServer();
                         }
                     });
-                } catch (e) {}
+                } catch (e) { }
             }
 
             resolve(server);

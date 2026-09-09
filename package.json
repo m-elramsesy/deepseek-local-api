@@ -1,6 +1,6 @@
 {
   "name": "@ramsesy/deepseek-local-api",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "Convert DeepSeek Web Chat to an OpenAI-compatible local API and interactive CLI for any harness or agent",
   "publishConfig": {
     "access": "public"

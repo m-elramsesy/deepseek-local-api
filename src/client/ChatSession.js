@@ -72,9 +72,15 @@ class ChatSession {
             }
 
             const data = await response.json();
+            if (data && data.code !== undefined && data.code !== 0) {
+                const errorMsg = data.msg || data.biz_msg || `API error code ${data.code}`;
+                throw new Error(`DeepSeek API error (${data.code}): ${errorMsg}`);
+            }
+
             const sessionId = data?.data?.biz_data?.id || data?.biz_data?.id;
             if (!sessionId) {
-                throw new Error("Could not find session ID in response");
+                const errorMsg = data?.msg || data?.biz_msg || "Could not find session ID in DeepSeek response";
+                throw new Error(`DeepSeek error: ${errorMsg}`);
             }
 
             const session = new ChatSession(sessionId, parentMessageId);
@@ -112,12 +118,16 @@ class ChatSession {
 
             if (res.ok) {
                 const data = await res.json();
-                const messages = data?.data?.biz_data?.chat_messages || data?.biz_data?.chat_messages || [];
-                if (messages.length > 0) {
-                    const lastMsg = messages[messages.length - 1];
-                    parentMessageId = lastMsg.message_id || lastMsg.id || parentMessageId;
-                    if (!saved?.title && messages[0]?.content) {
-                        title = messages[0].content.slice(0, 35);
+                if (data && data.code !== undefined && data.code !== 0) {
+                    console.warn(`Failed to fetch history (${data.code}): ${data.msg || data.biz_msg}`);
+                } else {
+                    const messages = data?.data?.biz_data?.chat_messages || data?.biz_data?.chat_messages || [];
+                    if (messages.length > 0) {
+                        const lastMsg = messages[messages.length - 1];
+                        parentMessageId = lastMsg.message_id || lastMsg.id || parentMessageId;
+                        if (!saved?.title && messages[0]?.content) {
+                            title = messages[0].content.slice(0, 35);
+                        }
                     }
                 }
             }

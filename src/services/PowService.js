@@ -30,7 +30,15 @@ class PowService {
             }
 
             const data = await response.json();
-            const challenge = data.data.biz_data.challenge;
+            if (data && data.code !== undefined && data.code !== 0) {
+                const errorMsg = data.msg || data.biz_msg || `API error code ${data.code}`;
+                throw new Error(`DeepSeek PoW challenge failed (${data.code}): ${errorMsg}`);
+            }
+
+            const challenge = data?.data?.biz_data?.challenge;
+            if (!challenge) {
+                throw new Error("DeepSeek PoW challenge missing from response");
+            }
 
             if (!WASM_CONFIG.SUPPORTED_ALGORITHMS.includes(challenge.algorithm)) {
                 throw new Error(`Unsupported algorithm: ${challenge.algorithm}`);

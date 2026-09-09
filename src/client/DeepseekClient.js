@@ -71,9 +71,25 @@ class DeepseekClient {
                 throw new Error(`Chat completion failed: ${response.status}`);
             }
 
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                const clone = response.clone();
+                try {
+                    const data = await clone.json();
+                    if (data && data.code !== undefined && data.code !== 0) {
+                        const errorMsg = data.msg || data.biz_msg || `API error code ${data.code}`;
+                        throw new Error(`DeepSeek API error (${data.code}): ${errorMsg}`);
+                    }
+                } catch (e) {
+                    if (e.message.startsWith('DeepSeek API error')) {
+                        throw e;
+                    }
+                }
+            }
+
             // Increment message ID for AI response
             chatSession.incrementMessageId();
-            
+
             return response;
         } catch (error) {
             console.error("Error in sendMessage:", error);
@@ -127,7 +143,7 @@ class DeepseekClient {
                                     };
                                 }
                             }
-                        } catch (e) {}
+                        } catch (e) { }
                     }
                 }
             }

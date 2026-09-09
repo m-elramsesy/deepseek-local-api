@@ -348,7 +348,9 @@ async function ensureToken(cliToken, isServer = false) {
     }
 
     if (process.env.DEEPSEEK_TOKEN && process.env.DEEPSEEK_TOKEN.trim()) {
-        return process.env.DEEPSEEK_TOKEN.trim();
+        const cleaned = process.env.DEEPSEEK_TOKEN.trim().replace(/^["']|["']$/g, '').trim();
+        process.env.DEEPSEEK_TOKEN = cleaned;
+        return cleaned;
     }
 
     // Try interactive prompt if in terminal
