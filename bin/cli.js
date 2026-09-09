@@ -50,6 +50,7 @@ if (args.includes('--help') || args.includes('-h')) {
   --network, -n, --public Enable local network / LAN access (binds to 0.0.0.0)
 
 \x1b[1mGENERAL OPTIONS:\x1b[0m
+  --token, -t [token]    Provide DeepSeek auth token directly
   --help, -h             Show this help screen
   --version, -v          Show package version
 

@@ -86,7 +86,10 @@ function formatMessagesToPrompt(messages) {
  * @returns {Promise<http.Server>}
  */
 async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
-    const defaultClient = new DeepseekClient(token || null);
+    if (!token) {
+        throw new Error('DEEPSEEK_TOKEN is strictly required to start the local server.');
+    }
+    const defaultClient = new DeepseekClient(token);
     process.stdout.write('Initializing DeepSeek client & WASM solver for local server... ');
     await defaultClient.initialize();
     console.log('Done.\n');
@@ -300,11 +303,7 @@ async function startServer({ token, port = 3000, isNetworkAvailable = false }) {
             } else {
                 console.log(`│ 🔒 Network Access    : Disabled (127.0.0.1 - localhost only)`);
             }
-            if (hasDefaultToken) {
-                console.log(`│ 🔑 Auth Mode         : Server DEEPSEEK_TOKEN active (Bearer header can override)`);
-            } else {
-                console.log(`│ 🔑 Auth Mode         : Per-request Bearer token (no server DEEPSEEK_TOKEN set)`);
-            }
+            console.log(`│ 🔑 Auth Status       : Active (DEEPSEEK_TOKEN verified)`);
             console.log('├──────────────────────────────────────────────────────────────────────────');
             console.log(`│ 💬 Chat Endpoint     : POST http://localhost:${port}/v1/chat/completions`);
             console.log(`│ 📋 Models Endpoint   : GET  http://localhost:${port}/v1/models`);
