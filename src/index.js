@@ -1,0 +1,307 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('dotenv').config();
+
+const readline = require('readline');
+const DeepseekClient = require('./client/DeepseekClient');
+const ChatSession = require('./client/ChatSession');
+const { startServer } = require('./services/server');
+const { createCompleter } = require('./services/autocomplete');
+
+function printSessionBanner(session) {
+    const id = session.getId();
+    const url = session.getWebUrl();
+    console.log('\n┌──────────────────────────────────────────────────────────────────────────');
+    console.log(`│ 💬 DeepSeek Session ID : ${id}`);
+    console.log(`│ 🌐 Direct Web URL      : ${url}`);
+    console.log('└──────────────────────────────────────────────────────────────────────────\n');
+}
+
+/**
+ * Send a message to DeepSeek and stream the response to console
+ * @param {string} token - DeepSeek auth token
+ * @param {string} message - Message prompt
+ * @param {string|null} sessionIdOrUrl - Optional existing session ID or web URL
+ * @returns {Promise<ChatSession>}
+ */
+async function chat(token, message, sessionIdOrUrl = null) {
+    const client = new DeepseekClient(token);
+    await client.initialize();
+
+    let session;
+    if (sessionIdOrUrl) {
+        console.log(`Connecting to existing session: ${sessionIdOrUrl}...`);
+        session = await client.resumeSession(sessionIdOrUrl);
+    } else {
+        session = await client.createSession();
+    }
+
+    printSessionBanner(session);
+
+    console.log(`User: ${message}\n`);
+    const response = await client.sendMessage(message, session, {
+        thinking_enabled: true,
+        search_enabled: false
+    });
+
+    let currentMode = null;
+    for await (const chunk of client.streamResponse(response, session)) {
+        if (typeof chunk === 'string') {
+            process.stdout.write(chunk);
+        } else if (chunk.type === 'thinking') {
+            if (currentMode !== 'thinking') {
+                process.stdout.write('\n\x1b[2m[Thinking Process]:\n');
+                currentMode = 'thinking';
+            }
+            process.stdout.write(chunk.text);
+        } else if (chunk.type === 'content') {
+            if (currentMode === 'thinking') {
+                process.stdout.write('\x1b[0m\n\nAssistant:\n');
+                currentMode = 'content';
+            } else if (currentMode === null) {
+                process.stdout.write('Assistant:\n');
+                currentMode = 'content';
+            }
+            process.stdout.write(chunk.text);
+        }
+    }
+    process.stdout.write('\x1b[0m\n\n');
+    return session;
+}
+
+/**
+ * Start an interactive multi-turn chat session in terminal
+ */
+async function startInteractive(token, initialSessionIdOrUrl = null) {
+    const client = new DeepseekClient(token);
+    process.stdout.write('Initializing DeepSeek client & WASM solver... ');
+    await client.initialize();
+    console.log('Done.\n');
+
+    let currentSession = null;
+    if (initialSessionIdOrUrl) {
+        currentSession = await client.resumeSession(initialSessionIdOrUrl);
+    } else {
+        const saved = ChatSession.loadAllSavedSessions();
+        if (saved.length > 0) {
+            console.log('Recent Saved Sessions:');
+            saved.slice(0, 5).forEach((s, idx) => {
+                console.log(`  [${idx + 1}] ${s.title || 'Untitled'} (${s.id})`);
+            });
+            console.log('  [0] Start a brand new session\n');
+        }
+
+        const rlInit = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const choice = await new Promise(resolve => {
+            rlInit.question('Enter number, paste a Session ID / Web URL, or press Enter for new session: ', answer => {
+                rlInit.close();
+                resolve(answer.trim());
+            });
+        });
+
+        const num = parseInt(choice, 10);
+        if (!isNaN(num) && num > 0 && num <= saved.length) {
+            currentSession = await client.resumeSession(saved[num - 1].id);
+        } else if (choice.length > 10) {
+            currentSession = await client.resumeSession(choice);
+        } else {
+            currentSession = await client.createSession();
+        }
+    }
+
+    printSessionBanner(currentSession);
+    console.log('Commands: /help (list all), /thinking (toggle think), /search (toggle web), /server (start API), /exit\n');
+    console.log('\x1b[2m(Tip: Press Tab to autocomplete commands)\x1b[0m\n');
+
+    let thinkingEnabled = true;
+    let searchEnabled = false;
+
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        prompt: 'You > ',
+        completer: createCompleter()
+    });
+
+    rl.prompt();
+
+    rl.on('line', async (line) => {
+        const input = line.trim();
+        if (!input) {
+            rl.prompt();
+            return;
+        }
+
+        if (input === '/exit' || input === '/quit') {
+            rl.close();
+            process.exit(0);
+        }
+
+        if (input === '/help') {
+            console.log('\nAvailable In-Chat Commands (Press Tab to autocomplete):');
+            console.log('  /id          - Show current session ID and web URL');
+            console.log('  /new         - Start a brand new session');
+            console.log('  /resume [id] - Resume an existing session by ID or URL');
+            console.log(`  /thinking    - Toggle thinking mode (current: ${thinkingEnabled ? 'ON' : 'OFF'})`);
+            console.log(`  /search      - Toggle web search (current: ${searchEnabled ? 'ON' : 'OFF'})`);
+            console.log('  /server [p]  - Start local OpenAI-compatible server on port [p]');
+            console.log('  /exit        - Exit the chat\n');
+            rl.prompt();
+            return;
+        }
+
+        if (input === '/id' || input === '/url') {
+            printSessionBanner(currentSession);
+            rl.prompt();
+            return;
+        }
+
+        if (input === '/thinking' || input === '/think') {
+            thinkingEnabled = !thinkingEnabled;
+            console.log(`💡 Thinking Mode: ${thinkingEnabled ? '\x1b[32mON\x1b[0m (DeepSeek Reasoner enabled)' : '\x1b[31mOFF\x1b[0m'}\n`);
+            rl.prompt();
+            return;
+        }
+
+        if (input === '/search' || input === '/web') {
+            searchEnabled = !searchEnabled;
+            console.log(`🌐 Web Search: ${searchEnabled ? '\x1b[32mON\x1b[0m' : '\x1b[31mOFF\x1b[0m'}\n`);
+            rl.prompt();
+            return;
+        }
+
+        if (input.startsWith('/server')) {
+            const parts = input.split(/\s+/);
+            const targetPort = parts[1] ? parseInt(parts[1], 10) : 3000;
+            const isNet = parts.includes('--network') || parts.includes('-n');
+            console.log(`\n🚀 Launching local OpenAI-compatible API server on port ${targetPort}...`);
+            startServer({ token, port: targetPort, isNetworkAvailable: isNet }).catch(err => {
+                console.error('Failed to start server:', err.message);
+            });
+            return;
+        }
+
+        if (input === '/new') {
+            currentSession = await client.createSession();
+            console.log('✓ Started new session:');
+            printSessionBanner(currentSession);
+            rl.prompt();
+            return;
+        }
+
+        if (input.startsWith('/resume ')) {
+            const targetId = input.slice(8).trim();
+            currentSession = await client.resumeSession(targetId);
+            console.log('✓ Resumed session:');
+            printSessionBanner(currentSession);
+            rl.prompt();
+            return;
+        }
+
+        try {
+            const response = await client.sendMessage(input, currentSession, {
+                thinking_enabled: thinkingEnabled,
+                search_enabled: searchEnabled
+            });
+
+            let currentMode = null;
+            for await (const chunk of client.streamResponse(response, currentSession)) {
+                if (typeof chunk === 'string') {
+                    process.stdout.write(chunk);
+                } else if (chunk.type === 'thinking') {
+                    if (currentMode !== 'thinking') {
+                        process.stdout.write('\n\x1b[2m[Thinking Process]:\n');
+                        currentMode = 'thinking';
+                    }
+                    process.stdout.write(chunk.text);
+                } else if (chunk.type === 'content') {
+                    if (currentMode === 'thinking') {
+                        process.stdout.write('\x1b[0m\n\nDeepSeek:\n');
+                        currentMode = 'content';
+                    } else if (currentMode === null) {
+                        process.stdout.write('DeepSeek:\n');
+                        currentMode = 'content';
+                    }
+                    process.stdout.write(chunk.text);
+                }
+            }
+            process.stdout.write('\x1b[0m\n\n');
+        } catch (err) {
+            console.error('\nError:', err.message, '\n');
+        }
+
+        rl.prompt();
+    });
+}
+
+function parseCliArgs(argv) {
+    const args = argv.slice(2);
+    let isServer = false;
+    let port = 3000;
+    let isNetworkAvailable = false;
+    const otherArgs = [];
+
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+
+        if (arg === '--network' || arg === '--public' || arg === '-n') {
+            isNetworkAvailable = true;
+            continue;
+        }
+
+        if (arg === '--server' || arg === '-s' || arg === '--port' || arg === '-p') {
+            isServer = true;
+            const next = args[i + 1];
+            if (next && !next.startsWith('-')) {
+                const parsedPort = parseInt(next, 10);
+                if (!isNaN(parsedPort) && parsedPort > 0) {
+                    port = parsedPort;
+                    i++;
+                }
+            }
+            continue;
+        }
+
+        if (arg.startsWith('--server=') || arg.startsWith('--port=')) {
+            isServer = true;
+            const val = arg.split('=')[1];
+            const parsedPort = parseInt(val, 10);
+            if (!isNaN(parsedPort) && parsedPort > 0) {
+                port = parsedPort;
+            }
+            continue;
+        }
+
+        otherArgs.push(arg);
+    }
+
+    return { isServer, port, isNetworkAvailable, otherArgs };
+}
+
+module.exports = { chat, startInteractive, startServer, parseCliArgs };
+
+if (require.main === module) {
+    const token = process.env.DEEPSEEK_TOKEN;
+    if (!token) {
+        console.error("Please set DEEPSEEK_TOKEN in .env");
+        process.exit(1);
+    }
+
+    const { isServer, port, isNetworkAvailable, otherArgs } = parseCliArgs(process.argv);
+
+    if (isServer) {
+        startServer({ token, port, isNetworkAvailable }).catch(err => {
+            console.error('Failed to start server:', err.message);
+            process.exit(1);
+        });
+    } else {
+        const messageArg = otherArgs[0];
+        const sessionArg = otherArgs[1];
+
+        if (messageArg && messageArg !== '--interactive' && messageArg !== '-i') {
+            chat(token, messageArg, sessionArg).catch(console.error);
+        } else {
+            startInteractive(token, sessionArg).catch(console.error);
+        }
+    }
+} 

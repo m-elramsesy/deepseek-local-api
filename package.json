@@ -1,0 +1,45 @@
+{
+  "name": "deepseek-local-api",
+  "version": "0.8.0",
+  "description": "Convert DeepSeek Web Chat to an OpenAI-compatible local API and interactive CLI for any harness or agent",
+  "main": "src/index.js",
+  "bin": {
+    "deepseek-local-api": "bin/cli.js",
+    "deepseek": "bin/cli.js"
+  },
+  "scripts": {
+    "start": "node -r dotenv/config src/index.js",
+    "server": "node -r dotenv/config src/index.js --server 3000",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "files": [
+    "bin",
+    "src",
+    "wasm",
+    ".env.example",
+    "README.md"
+  ],
+  "keywords": [
+    "deepseek",
+    "chat",
+    "api",
+    "openai-compatible",
+    "llm",
+    "harness",
+    "reasoner",
+    "client",
+    "cli"
+  ],
+  "author": "elramsesy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/springmusk026/DeepSeek-Chat-API-Client.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.0.3"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

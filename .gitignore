@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Private environment variables & credentials
+.env
+.env.local
+.env.*.local
+
+# Private standalone folder (not to be pushed anywhere)
+standalone/
+
+# Runtime session cache and logs
+data/
+scratch/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS metadata
+.DS_Store
+Thumbs.db
