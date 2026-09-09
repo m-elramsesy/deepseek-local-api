@@ -118,8 +118,33 @@ deepseek
 ### Mode 3: Single-Turn CLI Prompt
 Send a quick prompt and stream the result directly to your terminal:
 ```bash
-deepseek "Explain Dijkstra algorithm in simple terms"
+deepseek "Explain the difference between process.nextTick and setImmediate in Node.js"
 ```
+
+---
+
+### Mode 4: Agent Delegation & Direct File Output (`call`)
+Offload heavy code generation directly from your terminal or AI Agent with automatic code extraction:
+```bash
+# Offload file creation to DeepSeek (saves tokens on Gemini/Claude/Hermes!)
+deepseek call -p "Create an Express rate limiter middleware with in-memory sliding window" -o ./src/rateLimiter.js
+
+# Or run anywhere via npx (zero installation needed):
+npx @ramsesy/deepseek-local-api call -p "Write an async queue worker in TypeScript" -o ./src/queue.ts
+
+# Refactor an existing file using DeepSeek R1 reasoning:
+deepseek call -p "Optimize performance and fix memory leaks" -f ./src/dataProcessor.js -m deepseek-reasoner -o ./src/dataProcessor.js
+```
+
+---
+
+## 💰 Token Economics: Frontier Models + DeepSeek Subagent
+
+| Model in Your Harness | Challenge | Solution with `deepseek-local-api` |
+| :--- | :--- | :--- |
+| **Gemini 2.5 (Antigravity)** | High rate-limit & token consumption for 500+ line codebases | Gemini plans the architecture, DeepSeek writes the heavy code (**0 tokens**). |
+| **Claude 3.7 / Opus (Claude Code)** | Expensive output token pricing for large boilerplate files | Claude oversees & audits, DeepSeek generates the raw implementation. |
+| **Hermes / OpenCode** | Local / open-source tool execution efficiency | Harness executes `write_to_file` & tests, DeepSeek handles R1 reasoning. |
 
 ---
 

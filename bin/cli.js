@@ -36,18 +36,29 @@ if (args.includes('--help') || args.includes('-h')) {
     deepseek-local-api
     (Launches multi-turn interactive session with Tab autocomplete)
 
+  \x1b[32mAgent Delegation / Code Generation:\x1b[0m
+    deepseek call -p "Write an Express auth middleware" -o src/auth.js
+    deepseek call -p "Refactor this logic" -f ./src/logic.js -m deepseek-reasoner
+
   \x1b[32mSingle Prompt:\x1b[0m
     deepseek-local-api "Your prompt message"
     deepseek-local-api "Your prompt" [session-id]
 
   \x1b[32mOpenAI-Compatible Local API Server:\x1b[0m
-    deepseek-local-api --server 3000
+    deepseek-local-api --server 4040
     deepseek-local-api --server 8080 --network
 
 \x1b[1mSERVER OPTIONS:\x1b[0m
   --server, -s [port]    Start OpenAI-compatible HTTP server (default port: 3000)
   --port, -p [port]      Alternative port flag
   --network, -n, --public Enable local network / LAN access (binds to 0.0.0.0)
+
+\x1b[1mDELEGATION OPTIONS:\x1b[0m
+  call, delegate         Execute delegation query to local DeepSeek gateway
+  -p, --prompt           Prompt string
+  -f, --file             Context file input
+  -o, --output           Output file path (automatically extracts clean code)
+  -m, --model            Model name (deepseek-chat or deepseek-reasoner)
 
 \x1b[1mGENERAL OPTIONS:\x1b[0m
   --token, -t [token]    Provide DeepSeek auth token directly
@@ -68,6 +79,14 @@ if (args.includes('--version') || args.includes('-v')) {
     process.exit(0);
 }
 
+// Handle 'call' or 'delegate' subcommand for skill delegation
+if (args[0] === 'call' || args[0] === 'delegate') {
+    const { callDeepseek } = require('../skills/delegate-to-deepseek/scripts/call-deepseek.js');
+    callDeepseek(args.slice(1));
+    return;
+}
+
 // Forward execution to main CLI runner
 const { runCli } = require('../src/index.js');
 runCli();
+

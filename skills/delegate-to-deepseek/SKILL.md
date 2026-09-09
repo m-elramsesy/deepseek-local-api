@@ -1,17 +1,52 @@
 ---
 name: delegate-to-deepseek
-description: Delegate heavy coding, full-file generation, architectural design, deep debugging, and code analysis to a local DeepSeek instance via deepseek-local-api gateway or CLI. DeepSeek acts as the pure-text reasoning brain, while the host harness executes the tool actions (file creation, edits, command execution).
+description: Delegate heavy coding, full-file generation, architectural design, deep debugging, and code analysis to a local DeepSeek instance via deepseek-local-api gateway or CLI. Allows frontier models (Gemini in Antigravity, Claude in Claude Code, GPT-4o) or open agents (Hermes, OpenCode) to save tokens and avoid quota depletion by offloading heavy code generation to DeepSeek as a subagent or worker. DeepSeek acts as the pure-text reasoning brain, while the host harness executes the tool actions (file creation, edits, command execution).
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   author: "m-elramsesy"
   compatibility: "Works with any agent harness (Hermes, Claude Code, Antigravity, OpenCode, Cursor, Continue) that possesses file and command tools."
-  tags: "deepseek, local-api, code-generation, delegation, reasoning, code-analysis, harness"
+  tags: "deepseek, local-api, code-generation, delegation, reasoning, code-analysis, subagent, token-saver, harness"
 ---
 
-# Delegate to DeepSeek (Text-to-Tools Bridge)
+# Delegate to DeepSeek (The Brain & Hands Bridge)
 
-Use this skill whenever you need to offload complex coding, complete file generation, architectural design, or in-depth code analysis to a local DeepSeek instance powered by **`deepseek-local-api`**.
+Use this skill whenever you need to offload complex coding, complete file generation, architectural design, deep debugging, or in-depth code analysis to a local DeepSeek instance powered by **`deepseek-local-api`**.
+
+---
+
+## 💡 Why This Skill Exists: The Token Economics & Subagent Pattern
+
+When using high-tier frontier models like **Gemini 2.5 on Antigravity**, **Claude 3.7 / Opus on Claude Code**, or **GPT-4o**:
+- Generating large source code files (100–1000 lines), writing boilerplate, refactoring whole modules, or iterative debugging consumes **enormous amounts of expensive API tokens and rate limits**.
+- DeepSeek Web (R1 & V3) offers world-class coding and reasoning capabilities, bridged via `deepseek-local-api` into an OpenAI-compatible local server at **zero token cost**.
+
+### 🌟 The Architecture: Architect vs. Worker Subagent
+```
+┌────────────────────────────────────────────────────────┐
+│     Frontier Host Agent (Gemini / Claude / Hermes)     │
+│   • Role: The Architect & Supervisor                   │
+│   • Tasks: Understands user requirements, plans steps  │
+│   • Token Usage: Minimal (only high-level orchestration)│
+└──────────────────────────┬─────────────────────────────┘
+                           │ 1. Spawns Subagent / Executes Delegation
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│             DeepSeek Subagent / Local Gateway          │
+│   • Role: The Coding Engine (Pure Brain)               │
+│   • Tasks: Writes 100% complete files, algorithms, R1   │
+│   • Cost: ZERO Tokens (Free unlimited local gateway)   │
+└──────────────────────────┬─────────────────────────────┘
+                           │ 2. Returns Clean Generated Code
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│     Frontier Host Agent (Gemini / Claude / Hermes)     │
+│   • Role: The Hands (Tool Execution)                   │
+│   • Actions: write_to_file, run syntax checks, tests   │
+└────────────────────────────────────────────────────────┘
+```
+
+By delegating the raw file generation to DeepSeek, you **save over 80–90% of your primary model's token consumption** while maintaining the superior tool execution and project understanding of your host agent!
 
 ---
 
@@ -31,70 +66,51 @@ npx skills add m-elramsesy/deepseek-local-api --skill delegate-to-deepseek -g
 
 ---
 
-## 🧠 Core Philosophy: The Brain & Hands Architecture
+## 🚀 Practical Guide for Hermes, OpenCode & Coding Agents
 
-When working with `deepseek-local-api`:
+Many agents fail in practical execution when they attempt to execute scripts using relative paths (`node skills/delegate-to-deepseek/...`) because the skill is installed globally in `~/.agents/` or `AppData/Local/hermes/`. 
 
-| Role | Entity | Responsibilities | Capabilities & Constraints |
-| :--- | :--- | :--- | :--- |
-| **The Brain** | **DeepSeek (Local API / CLI)** | Pure text generation, R1 deep chain-of-thought, production-grade code synthesis, comprehensive file review. | **Pure Text In / Pure Text Out**. DeepSeek does **NOT** have direct disk access, terminal access, or local tool calling. |
-| **The Hands** | **The Host Harness (Hermes / Agent)** | Context gathering, sending prompts to gateway, reading file contents, executing tool actions. | **Full Tool Access**. The harness has `write_to_file`, `replace_file_content`, `run_command`, workspace search, and terminal control. |
+To make this work **100% reliably in any directory without missing paths**:
 
+### Step 0: Ensure the Local Gateway Server is Running
+
+Before querying, check if the server is active:
+```bash
+curl -s http://127.0.0.1:4040/health
 ```
-┌────────────────────────────────────────────────────────┐
-│               Host Harness (Hermes / Agent)            │
-│  - Reads local files & user requirements               │
-│  - Packages pure-text prompt                           │
-└──────────────────────────┬─────────────────────────────┘
-                           │ 1. HTTP POST or CLI (Pure Text)
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│            Local DeepSeek Gateway / CLI                │
-│             (chat.deepseek.com bridge)                 │
-│  - Deep reasoning (R1 / V3)                            │
-│  - Synthesizes 100% complete code & solutions          │
-└──────────────────────────┬─────────────────────────────┘
-                           │ 2. Returns Generated Code (Pure Text)
-                           ▼
-┌────────────────────────────────────────────────────────┐
-│               Host Harness (Hermes / Agent)            │
-│  - Extracts code blocks & file paths                   │
-│  - Invokes native tools: write_to_file, run_command    │
-│  - Creates/modifies files on disk / Desktop            │
-└────────────────────────────────────────────────────────┘
-```
+If not running (or returning Connection Refused), launch it in the background:
+```bash
+# Windows (PowerShell):
+Start-Process -NoNewWindow -FilePath "npx" -ArgumentList "@ramsesy/deepseek-local-api -s 4040"
 
-The bridge between the harness and DeepSeek is **strictly text**. DeepSeek creates the exact, complete code as text; the harness uses its native tools to bring that code to life in the filesystem.
+# Linux / macOS / Bash:
+npx @ramsesy/deepseek-local-api -s 4040 &
+
+# Or if installed globally:
+deepseek -s 4040 &
+```
 
 ---
 
-## 🎯 When to Trigger This Skill
+### Step 1: Execute Delegation via Universal CLI (Zero Path Hassle)
 
-Activate this workflow when:
-1. **Generating New Code Files**: The user asks for a complete JavaScript, TypeScript, Python, HTML, CSS, or backend module.
-2. **Deep Code Analysis / Review**: The user wants an in-depth code review, security audit, or architectural critique of an entire file.
-3. **Heavy Algorithmic / Complex Logic**: Complex data structures, regex, mathematical algorithms, or intricate state machines.
-4. **Refactoring Large Files**: Restructuring legacy files while preserving all existing logic and APIs without truncation.
-5. **Hard-to-Track Bugs**: Passing error logs, stack traces, and relevant file contents to DeepSeek R1 for root-cause diagnosis.
+You do **not** need to locate any local script file. Use the universal CLI subcommand `call` directly from any directory:
 
----
+#### Option A: Direct File Generation with Auto-Code Extraction
+```bash
+# Writes the generated code directly to the target file!
+npx @ramsesy/deepseek-local-api call -p "Write an Express.js rate limiter middleware with in-memory sliding window" -o ./src/rateLimiter.js
+```
+*Note: `-o <filepath>` automatically strips markdown backticks and writes clean, production-ready code directly to disk.*
 
-## 🛠️ Step-by-Step Harness Execution Workflow
+#### Option B: Complex Reasoning & Refactoring with DeepSeek R1
+```bash
+# Offload deep reasoning / bug diagnosis to deepseek-reasoner
+npx @ramsesy/deepseek-local-api call -p "Analyze why this algorithm causes a memory leak and fix it" -f ./src/heavy-module.js -m deepseek-reasoner -o ./src/heavy-module.js
+```
 
-### Step 1: Context Aggregation (Harness Tool Call)
-Before contacting DeepSeek, the harness collects all necessary context using its own tools:
-- Read existing target files (`view_file` or `cat`).
-- Inspect project configuration (`package.json`, `tsconfig.json`).
-- Gather error logs, stack traces, or dependency lists.
-
-### Step 2: Query Local DeepSeek Gateway
-
-The harness transmits the packaged prompt to the local gateway using one of the standard methods:
-
-#### Method A: HTTP Request to OpenAI-Compatible Gateway (Recommended)
-Default endpoints: `http://127.0.0.1:4040/v1` or `http://127.0.0.1:3000/v1`
-
-**Curl Example:**
+#### Option C: Native HTTP API (Standard OpenAI Format)
+Any agent with `curl` or HTTP capability can query the local endpoint:
 ```bash
 curl -s http://127.0.0.1:4040/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -103,60 +119,53 @@ curl -s http://127.0.0.1:4040/v1/chat/completions \
     "messages": [
       {
         "role": "system",
-        "content": "You are DeepSeek. Output full, complete, production-ready code with no abbreviations or omitted sections. Place each file inside a markdown code block with the target file path labeled on the preceding line (e.g. ### File: path/to/file.js)."
+        "content": "You are DeepSeek. Output 100% complete, production-grade code. No placeholders, no omissions."
       },
       {
         "role": "user",
-        "content": "Create an Express.js rate limiter middleware with in-memory sliding window."
+        "content": "Create a robust TypeScript WebSocket reconnect client."
       }
     ]
   }'
 ```
 
-*Tip*: Use model `deepseek-reasoner` to enable DeepSeek R1 reasoning chain for complex debugging or architecture problems.
+---
 
-#### Method B: Built-in Helper Script
-Use the bundled zero-dependency Node script:
-```bash
-node skills/delegate-to-deepseek/scripts/call-deepseek.js \
-  --port 4040 \
-  --prompt "Write a JavaScript debounce and throttle utility file with full TypeScript types."
-```
+### Step 2: Subagent Invocation Pattern
 
-Or pass a context file:
-```bash
-node skills/delegate-to-deepseek/scripts/call-deepseek.js \
-  --port 4040 \
-  --file ./src/legacy-module.js \
-  --prompt "Refactor this module to use modern async/await and ES modules."
-```
+When working inside multi-agent frameworks (Antigravity, Claude Code, OpenCode, Hermes):
 
-#### Method C: CLI Shortcut
-```bash
-deepseek "Create a standalone WebSocket server script in Node.js"
-# or
-npx @ramsesy/deepseek-local-api "Your prompt here"
-```
+1. **Subagent Definition**: Configure a worker subagent with:
+   - **Base URL**: `http://127.0.0.1:4040/v1`
+   - **Model**: `deepseek-chat` (or `deepseek-reasoner`)
+   - **API Key**: `dummy` (the local server uses the token configured in `.env`)
+2. **Subagent Task**: Send the code generation task to this subagent:
+   > *"Write the complete implementation of `userService.js` based on the database schema provided."*
+3. **Supervisor Review**: The primary supervisor model (Gemini/Claude) reviews the code, checks for any missed requirements, and delegates file writing to host tools.
 
 ---
 
-### Step 3: Parse Output & Extract Code
-The harness receives DeepSeek's pure-text response.
-- Locate the code blocks (e.g. ````javascript ... ````).
-- Identify target file destination (e.g. `./src/utils/rateLimiter.js` or `Desktop/script.js`).
-- Verify that the code is complete and free of placeholder comments like `// ... rest of implementation`.
+### Step 3: Tool Execution (The Host Agent's "Hands")
+
+DeepSeek acts purely as the brain. The host agent (Hermes, Claude Code, Antigravity) uses its native tools to finalize:
+1. **Write or Verify the File**:
+   If not using `-o`, write the received code using your native tool (`write_to_file` or `create_file`).
+2. **Syntax Validation**:
+   Run syntax verification:
+   ```bash
+   node -c ./src/rateLimiter.js
+   # or TypeScript check
+   npx tsc --noEmit
+   ```
+3. **Execute Tests**:
+   Run project tests to verify the generated implementation meets all test cases:
+   ```bash
+   npm test
+   ```
 
 ---
 
-### Step 4: Tool Execution (Harness Actions)
-The harness uses its own toolset to apply the changes:
-1. **Writing the File**: Invoke `write_to_file` (or `create_file` / shell redirection) to write the code directly to disk.
-2. **Syntax & Test Validation**: Invoke `run_command` to execute syntax checks or tests (e.g. `node -c <file>` or `npm test`).
-3. **Surgical Edits**: If updating existing code, use `replace_file_content` to apply the exact diffs provided by DeepSeek.
-
----
-
-## 📋 Recommended Prompting Templates for the Harness
+## 📋 Recommended Prompting Templates
 
 ### 1. New File Generation Prompt
 ```text
@@ -167,11 +176,11 @@ Requirements:
 
 Rules for output:
 1. Provide the 100% COMPLETE code for this file. DO NOT truncate or leave placeholders.
-2. Format as a single markdown code block with language specifier.
+2. Format as clean code. If enclosed in markdown, ensure standard code fence syntax.
 3. Ensure all imports, exports, type definitions, and error handling are fully implemented.
 ```
 
-### 2. File Analysis & Refactoring Prompt
+### 2. Large File Refactoring & Optimization Prompt
 ```text
 Task: Analyze and refactor the following existing file.
 
@@ -182,18 +191,19 @@ Current Content:
 ```
 
 Goal:
-[USER REQUEST: e.g., fix memory leak, optimize performance, add feature X]
+[USER REQUEST: e.g. fix memory leak, convert to async/await, add telemetry]
 
 Rules for output:
-1. Explain the diagnosis or architectural changes concisely.
-2. Output the complete updated file code block so the harness can overwrite or patch it directly.
+1. Provide the complete updated file code block so the harness can overwrite or patch it directly.
+2. Maintain all existing public APIs and edge cases.
 ```
 
 ### 3. Deep Bug Diagnosis (R1 Reasoner)
 ```text
 Model: deepseek-reasoner
-Prompt:
-We encountered the following runtime error:
+Task: Root-cause analysis and fix.
+
+Error Trace:
 [PASTE ERROR LOG / STACK TRACE]
 
 Relevant source code:
@@ -201,19 +211,13 @@ Relevant source code:
 [PASTE SOURCE CODE]
 ```
 
-Please perform deep root-cause analysis, identify the exact bug, and provide the fixed code block.
+Please perform deep root-cause analysis, identify the exact bug, and provide the complete fixed code block.
 ```
 
 ---
 
-## ⚙️ Best Practices & Guardrails
+## ⚙️ Best Practices & Troubleshooting
 
-1. **Verify Gateway Status**:
-   If the harness cannot connect to `http://127.0.0.1:4040/v1` or `3000/v1`, ensure the local server is started:
-   ```bash
-   node bin/cli.js -s 4040
-   ```
-2. **Preserve Complete Files**:
-   DeepSeek Web has a large context window. Always instruct DeepSeek to return full file implementations rather than partial diffs when creating new files, so the harness can execute a clean `write_to_file` call without hallucinating missing parts.
-3. **Let the Harness Handle the OS**:
-   Never ask DeepSeek to execute OS commands or file writes directly. Keep DeepSeek focused entirely on reasoning and code synthesis, while the harness executes all filesystem and terminal operations.
+1. **Keep Server Running**: Keep `deepseek -s 4040` running in a dedicated terminal or launch it as a background task.
+2. **Token Economy**: Reserve frontier models (Gemini Pro, Claude Opus) for architectural planning, user interactions, and final code reviews. Offload boilerplate, bulk writing, and algorithmic code to DeepSeek.
+3. **Auto-Start Feature**: The helper CLI (`call`) will automatically test the `/health` endpoint and attempt to spin up the local gateway server if not already active.
