@@ -134,5 +134,23 @@ CRITICAL OPERATIONAL RULES:
 
 ---
 
+### 🧩 Included Skill: `delegate-to-deepseek` (Text-to-Tools Bridge)
+
+This package bundles a dedicated Agent Skill located at [`skills/delegate-to-deepseek/SKILL.md`](skills/delegate-to-deepseek/SKILL.md).
+
+#### Philosophy:
+- **DeepSeek = The Brain**: Generates pure-text code, deep R1 chain-of-thought, and architecture. Does **not** touch the filesystem or execute commands.
+- **The Harness = The Hands**: Agents like Hermes, Claude Code, Antigravity, or OpenCode use their own native tools (`write_to_file`, `replace_file_content`, `run_command`) to apply DeepSeek's generated code to your computer.
+
+#### Quick CLI Helper:
+The skill includes a zero-dependency helper script for harnesses:
+```bash
+node skills/delegate-to-deepseek/scripts/call-deepseek.js \
+  --port 4040 \
+  --prompt "Create a complete Node.js CLI script for rate-limiting"
+```
+
+---
+
 ## 📄 License
 MIT
